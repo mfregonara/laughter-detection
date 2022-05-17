@@ -1,6 +1,10 @@
 *.ipynb_checkpoints
 *__pycache__
-
+venv
+.idea
+lared
+test.wav
+output
 audio_set/
 
 data/audioset/eval_segments.csv

@@ -4,3 +4,6 @@ tgt==1.4.4
 pyloudnorm==0.1.0
 praatio==3.8.0
 tensorboardX==1.9
+pandas
+tqdm
+nltk
