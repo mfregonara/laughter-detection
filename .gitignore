@@ -3,7 +3,8 @@
 venv
 .idea
 lared
-test.wav
+lared_ds
+test
 output
 audio_set/
 

@@ -7,3 +7,5 @@ tensorboardX==1.9
 pandas
 tqdm
 nltk
+soundfile
+numpy
