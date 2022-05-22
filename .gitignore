@@ -5,7 +5,7 @@ venv
 lared
 lared_ds
 test
-output
+output_high_sr_model_no_fine_tuning
 audio_set/
 
 data/audioset/eval_segments.csv

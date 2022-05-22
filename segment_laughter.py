@@ -3,6 +3,10 @@ import numpy as np
 import os
 import sys
 import torch
+import jpype
+jpype.startJVM()
+import asposecells
+from asposecells.api import Workbook, FileFormatType, SaveFormat
 from os import listdir
 from os.path import isfile, join
 import laugh_segmenter
@@ -34,7 +38,8 @@ def predict(config, device, model_path, audio_dir, sample_rate, threshold,
 
     # Iterate over audio files
     print("--- Making predictions ---")
-    total_instances = []
+    total_instances = {}
+    number_laughs = 0
     for audio_file in listdir(audio_dir):
         audio_path = join(audio_dir, audio_file)
         print(audio_file)
@@ -71,25 +76,50 @@ def predict(config, device, model_path, audio_dir, sample_rate, threshold,
         instances = laugh_segmenter.get_laughter_instances(probs, threshold=threshold, min_length=float(min_length),
                                                            fps=fps)
         print("found %d laughs." % (len(instances)))
-        total_instances = total_instances + instances
+        total_instances[str(audio_file)] = instances
+        number_laughs = number_laughs + len(instances)
 
-        # Save to textgrid
-        if len(instances) > 0:
-            laughs = [{'start': i[0], 'end': i[1]} for i in instances]
-            tg = tgt.TextGrid()
-            laughs_tier = tgt.IntervalTier(name='laughter', objects=[
-                tgt.Interval(l['start'], l['end'], 'laugh') for l in laughs])
-            tg.add_tier(laughs_tier)
-            text_dir = os.path.join(output_dir, str(lared_sample_rate) + 'Hz')
-            fname = os.path.splitext(audio_file)[0]
-            if not os.path.exists(text_dir):
-                os.makedirs(text_dir)
-            tgt.write_to_file(tg, os.path.join(text_dir, fname + '_laughter.TextGrid'))
+        # # Save to textgrid
+        # if len(instances) > 0:
+        #     laughs = [{'start': i[0], 'end': i[1]} for i in instances]
+        #     tg = tgt.TextGrid()
+        #     laughs_tier = tgt.IntervalTier(name='laughter', objects=[
+        #         tgt.Interval(l['start'], l['end'], 'laugh') for l in laughs])
+        #     tg.add_tier(laughs_tier)
+        #     text_dir = os.path.join(output_dir, str(lared_sample_rate) + 'Hz')
+        #     fname = os.path.splitext(audio_file)[0]
+        #     if not os.path.exists(text_dir):
+        #         os.makedirs(text_dir)
+        #     tgt.write_to_file(tg, os.path.join(text_dir, fname + '_laughter.TextGrid'))
+        #
+        #     print('Saved laughter segments in {}'.format(
+        #         os.path.join(text_dir, fname + '_laughter.TextGrid')))
 
-            print('Saved laughter segments in {}'.format(
-                os.path.join(text_dir, fname + '_laughter.TextGrid')))
+    # Save to workbook
+    workbook = Workbook(FileFormatType.XLSX)
+    sheet = workbook.getWorksheets().get(0)
+    cells = sheet.getCells()
+
+    cells.get(0, 0).putValue("audio file")
+    cells.get(0, 1).putValue("ini")
+    cells.get(0, 2).putValue("fin")
+    cells.get(0, 3).putValue("dur")
+
+    row = 1
+    for audio_file, laughter_timestamps in total_instances.items():
+        for laughter in laughter_timestamps:
+            cells.get(row, 0).putValue(os.path.splitext(audio_file)[0])
+            cells.get(row, 1).putValue(round(laughter[0], 2))
+            cells.get(row, 2).putValue(round(laughter[1], 2))
+            cells.get(row, 3).putValue(round(float(laughter[1] - laughter[0]), 2))
+            row = row + 1
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    workbook_dir = os.path.join(output_dir, str(lared_sample_rate) + 'Hz')
+    workbook.save(workbook_dir + ".xlsx")
+    jpype.shutdownJVM()
+    print("Results saved in workbook.")
 
     print();
-    print("Found a total of %d laughs." % (len(total_instances)))
-
-
+    print("Found a total of %d laughs." % (number_laughs))

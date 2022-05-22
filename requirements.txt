@@ -9,3 +9,4 @@ tqdm
 nltk
 soundfile
 numpy
+aspose-cells
