@@ -6,20 +6,24 @@ import argparse
 import librosa
 import os
 import sys
+
 import torch
 from os import listdir
 from os.path import isfile
 import configs
+import numpy as np
 import soundfile as sf
 from scipy.signal import butter, filtfilt
+from scipy.io import wavfile
+from pydub import AudioSegment
 
 from segment_laughter import predict
 
 sys.path.append('./utils/')
 
-sample_rate = 8000
+sample_rate = 44100
 lared_dir = "lared"
-lared_ds_dir = "lared_ds"
+lared_split_dir = "lared_split"
 lared_lp_dir = "lared_lp"
 
 parser = argparse.ArgumentParser()
@@ -41,36 +45,44 @@ output_dir = args.output_dir
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device {device}")
 
-print("--- Downsampling audio files to 8000Hz to match sample rate of model ---")
+for audio_file in listdir(lared_dir):
+    data, sr = librosa.load(os.path.join(lared_dir, audio_file), sample_rate)
+    librosa.util.normalize(data)
+    sf.write(os.path.join(lared_dir, audio_file), data, sr)
+
 for audio_file in listdir(lared_dir):
     print(audio_file)
+    full_audio = AudioSegment.from_wav(os.path.join(lared_dir, audio_file))
+    split_duration = 1000 * (full_audio.duration_seconds / 100)
+    for i in range(0, 100):
+        split_audio = full_audio[i*split_duration:(i+1)*split_duration]
+        split_audio.export(os.path.join(lared_split_dir, os.path.splitext(audio_file)[0]) + "_" + str(i+1) + ".wav", format="wav")
 
-    audio_path = os.path.join(lared_dir, audio_file)
-    if not isfile(audio_path):
-        raise Exception(f"Not a file: {audio_file}")
 
-    y, s = librosa.load(audio_path, sr=sample_rate)
-    output_path = os.path.join(lared_ds_dir, audio_file)
-    sf.write(output_path, y, s)
+def butter_lowpass_filter(data, cutoff, sample_rate, order):
+    nyq = 0.5 * sample_rate
+    normal_cutoff = cutoff / nyq
+    # Get the filter coefficients
+    b, a = butter(order, normal_cutoff, btype='low', analog=False)
+    y = filtfilt(b, a, data)
+    return y
+
 
 cutoff_f = 0.5 * lared_sample_rate
-print(f"--- Lowpassing audio files to {cutoff_f}Hz to simulate downsampling to {lared_sample_rate}Hz ---")
-for audio_file in listdir(lared_ds_dir):
-    print(audio_file)
+if cutoff_f <= 20000:
+    print(f"--- Lowpassing audio files to {cutoff_f}Hz to simulate downsampling to {lared_sample_rate}Hz ---")
+    for audio_file in listdir(lared_split_dir):
+        print(audio_file)
 
-    audio_path = os.path.join(lared_ds_dir, audio_file)
-    if not isfile(audio_path):
-        raise Exception(f"Not a file: {audio_file}")
+        audio_path = os.path.join(lared_split_dir, audio_file)
+        if not isfile(audio_path):
+            raise Exception(f"Not a file: {audio_file}")
+        sr, data = wavfile.read(audio_path)
 
-    y, s = librosa.load(audio_path, sr=sample_rate)
-    w = cutoff_f / (sample_rate / 2)
-    b, a = butter(5, w, 'low')
-    output = filtfilt(b, a, y)
+        filtered = butter_lowpass_filter(data, cutoff_f, sample_rate, 6)
 
-    output_path = os.path.join(lared_lp_dir, audio_file)
-    sf.write(output_path, output, s)
+        output_path = os.path.join(lared_lp_dir, audio_file)
+        wavfile.write(output_path, sr, filtered)
 
-
-# predict(config, device, model_path, lared_lp_dir, sample_rate, threshold,
-#         min_length, output_dir, lared_sample_rate)
-
+predict(config, device, model_path, lared_lp_dir, sample_rate, threshold,
+        min_length, output_dir, lared_sample_rate)

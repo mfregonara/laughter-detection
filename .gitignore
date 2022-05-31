@@ -3,8 +3,11 @@
 venv
 .idea
 lared
+lared_lp
 lared_ds
+lared_split
 test
+dataset_no_lp
 output_high_sr_model_no_fine_tuning
 audio_set/
 

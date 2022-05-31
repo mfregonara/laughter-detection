@@ -6,7 +6,7 @@ import torch
 import jpype
 jpype.startJVM()
 import asposecells
-from asposecells.api import Workbook, FileFormatType, SaveFormat
+from asposecells.api import Workbook, FileFormatType
 from os import listdir
 from os.path import isfile, join
 import laugh_segmenter
@@ -100,24 +100,28 @@ def predict(config, device, model_path, audio_dir, sample_rate, threshold,
     sheet = workbook.getWorksheets().get(0)
     cells = sheet.getCells()
 
-    cells.get(0, 0).putValue("audio file")
-    cells.get(0, 1).putValue("ini")
-    cells.get(0, 2).putValue("fin")
-    cells.get(0, 3).putValue("dur")
+    cells.get(0, 0).putValue("File")
+    cells.get(0, 1).putValue("Start")
+    cells.get(0, 2).putValue("End")
+    cells.get(0, 3).putValue("Duration")
 
     row = 1
     for audio_file, laughter_timestamps in total_instances.items():
+        parent_name = os.path.splitext(audio_file)[0][:13]
+        segment_number = os.path.splitext(audio_file)[0][14:]
+        segment_duration = 9900
+        previous_duration = segment_duration * (segment_number-1)
         for laughter in laughter_timestamps:
-            cells.get(row, 0).putValue(os.path.splitext(audio_file)[0])
-            cells.get(row, 1).putValue(round(laughter[0], 2))
-            cells.get(row, 2).putValue(round(laughter[1], 2))
+            cells.get(row, 0).putValue(parent_name)
+            cells.get(row, 1).putValue(round(previous_duration + laughter[0], 2))
+            cells.get(row, 2).putValue(round(previous_duration + laughter[1], 2))
             cells.get(row, 3).putValue(round(float(laughter[1] - laughter[0]), 2))
             row = row + 1
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     workbook_dir = os.path.join(output_dir, str(lared_sample_rate) + 'Hz')
-    workbook.save(workbook_dir + ".xlsx")
+    workbook.save(workbook_dir + ".csv")
     jpype.shutdownJVM()
     print("Results saved in workbook.")
 
